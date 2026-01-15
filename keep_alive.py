@@ -1,27 +1,17 @@
+# keep_alive.py
 from flask import Flask
 from threading import Thread
+import logging
 
-app = Flask(__name__)
+app = Flask('')
 
 @app.route('/')
 def home():
-    return "🤖 ГДЗ Навигатор Бот работает!"
+    return "🤖 Бот работает! Статус: ONLINE"
 
-@app.route('/health')
-def health():
-    return "✅ OK"
-
-@app.route('/status')
-def status():
-    try:
-        with open('bot.log', 'r') as f:
-            lines = f.readlines()[-10:]  # Последние 10 строк лога
-        return "".join(lines)
-    except:
-        return "Лог недоступен"
-
-def run_web():
+def run():
     app.run(host='0.0.0.0', port=8080)
 
-if __name__ == '__main__':
-    run_web()
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
