@@ -2,15 +2,19 @@
 import os
 import logging
 import sys
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 
-# Настройка логирования
+# Настройка логирования для PythonAnywhere
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
-    stream=sys.stdout  # Важно для Render
+    handlers=[
+        logging.FileHandler('bot.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -43,11 +47,31 @@ SUBJECTS_DATA = {
     ]
 }
 
-# URL вашего Mini App
-WEB_APP_URL = "https://razetka2010.github.io/gdz-navigator/"
+# Хранилище для избранного (в памяти, для PythonAnywhere лучше использовать файл)
+import json
 
-# Хранилище для избранного (в памяти)
-user_favorites = {}
+def load_favorites():
+    """Загрузить избранное из файла"""
+    try:
+        if os.path.exists('favorites.json'):
+            with open('favorites.json', 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading favorites: {e}")
+    return {}
+
+def save_favorites():
+    """Сохранить избранное в файл"""
+    try:
+        with open('favorites.json', 'w', encoding='utf-8') as f:
+            json.dump(user_favorites, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving favorites: {e}")
+
+user_favorites = load_favorites()
+
+# URL вашего Mini App (замените на реальный URL вашего Web App)
+WEB_APP_URL = "https://razetka2010.github.io/gdz-navigator/"
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,8 +93,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 /start - Главное меню
 /classes - Выбрать класс
 /favorites - Избранное
-/app - Открыть Mini App
+/app - Открыть Mini App прямо здесь
+/webapp - Открыть Web версию
 /help - Помощь
+
+Нажмите "📱 Mini App" для полного функционала в Telegram!
     """
     
     # Создаем WebApp кнопку для открытия Mini App
@@ -110,30 +137,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=ParseMode.MARKDOWN
         )
 
-# Команда /app
+# Команда /app - открыть Mini App
 async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Открыть Mini App"""
+    """Открыть Mini App прямо в Telegram"""
     app_text = """
 🚀 *Открываем Mini App...*
 
-Нажмите кнопку ниже, чтобы открыть полную версию ГДЗ Навигатора!
+Нажмите кнопку ниже, чтобы открыть полную версию ГДЗ Навигатора прямо в Telegram!
 
 *В Mini App доступно:*
 ✅ Удобный интерфейс с поиском
 ✅ Все предметы 7-9 классов
 ✅ Сохранение избранного
 ✅ Быстрая навигация
+
+*Кнопка ниже откроет приложение прямо в Telegram!*
     """
     
+    # Создаем WebApp кнопку
     web_app_button = InlineKeyboardButton(
-        "🎯 Открыть Mini App", 
+        "🎯 Открыть Mini App в Telegram", 
         web_app=WebAppInfo(url=WEB_APP_URL)
     )
     
     keyboard = [
         [web_app_button],
         [
-            InlineKeyboardButton("🌐 В браузере", url=WEB_APP_URL),
+            InlineKeyboardButton("🌐 Открыть в браузере", url=WEB_APP_URL),
             InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")
         ]
     ]
@@ -153,35 +183,89 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             parse_mode=ParseMode.MARKDOWN
         )
 
+# Команда /webapp - открыть Web версию
+async def webapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Открыть Web версию приложения"""
+    webapp_text = f"""
+🌐 *Web версия ГДЗ Навигатора*
+
+Откройте полную версию в браузере:
+
+{WEB_APP_URL}
+
+*Доступно в Web версии:*
+• Полнофункциональный поиск
+• Все предметы и классы
+• Сохранение избранного
+• Удобный интерфейс
+
+*Для лучшего опыта в Telegram используйте Mini App через кнопку в меню!*
+    """
+    
+    keyboard = [
+        [InlineKeyboardButton("🌐 Открыть в браузере", url=WEB_APP_URL)],
+        [
+            InlineKeyboardButton("📱 Mini App в Telegram", callback_data="open_miniapp"),
+            InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.message:
+        await update.message.reply_text(
+            webapp_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await update.callback_query.edit_message_text(
+            webapp_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+
 # Команда /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /help"""
     help_text = f"""
 *Помощь по использованию бота*
 
-*Как пользоваться:*
+*Доступны две версии:*
+1. *Бот* - быстрый доступ к основным предметам
+2. *Mini App* - полная версия с поиском в Telegram
+
+*Как пользоваться ботом:*
 1. Выберите класс через меню
 2. Выберите предмет
 3. Получите ссылку на ГДЗ
 4. Добавьте в избранное
 
+*Для полного функционала:*
+• Поиск по всем предметам
+• Удобная навигация
+• Сохранение настроек
+Используйте *Mini App* через кнопку ниже!
+
 *Команды:*
 /start - Главное меню
 /classes - Выбрать класс
 /favorites - Избранное
-/app - Открыть Mini App
+/app - Открыть Mini App в Telegram
+/webapp - Открыть Web версию
 /help - Эта справка
     """
     
+    # WebApp кнопка для Mini App
     web_app_button = InlineKeyboardButton(
-        "📱 Открыть Mini App", 
+        "📱 Открыть Mini App в Telegram", 
         web_app=WebAppInfo(url=WEB_APP_URL)
     )
     
     keyboard = [
         [web_app_button],
         [
-            InlineKeyboardButton("📚 Классы", callback_data="classes"),
+            InlineKeyboardButton("🌐 Web версия", url=WEB_APP_URL),
             InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")
         ]
     ]
@@ -204,6 +288,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # Команда /classes
 async def show_classes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Показать выбор классов"""
+    # WebApp кнопка для Mini App
     web_app_button = InlineKeyboardButton(
         "📱 Mini App", 
         web_app=WebAppInfo(url=WEB_APP_URL)
@@ -224,7 +309,7 @@ async def show_classes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    text = "📚 *Выберите класс:*"
+    text = "📚 *Выберите класс:*\n\nДля поиска и расширенного функционала откройте *Mini App*!"
     
     if update.message:
         await update.message.reply_text(
@@ -258,6 +343,7 @@ async def show_class_subjects(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Создаем клавиатуру с предметами
     keyboard = []
     for subject in subjects:
+        # Проверяем, есть ли предмет в избранном
         is_favorite = False
         if user_id in user_favorites:
             is_favorite = any(fav['url'] == subject['url'] for fav in user_favorites[user_id])
@@ -273,16 +359,22 @@ async def show_class_subjects(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         ])
     
+    # WebApp кнопка для Mini App
+    web_app_button = InlineKeyboardButton(
+        "📱 Mini App", 
+        web_app=WebAppInfo(url=WEB_APP_URL)
+    )
+    
     # Добавляем кнопки навигации
     keyboard.append([
-        InlineKeyboardButton("📱 Mini App", web_app=WebAppInfo(url=WEB_APP_URL)),
+        web_app_button,
         InlineKeyboardButton("⭐ Избранное", callback_data="favorites")
     ])
     keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="classes")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    text = f"📖 *{class_num} класс*\nВыберите предмет:"
+    text = f"📖 *{class_num} класс*\nВыберите предмет:\n\n*Для поиска используйте Mini App!*"
     
     await query.edit_message_text(
         text,
@@ -296,6 +388,7 @@ async def show_subject_info(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
     
+    # Извлекаем данные из callback_data
     data = query.data.split("_")
     class_num = data[1]
     subject_index = int(data[2])
@@ -303,6 +396,7 @@ async def show_subject_info(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     subject = SUBJECTS_DATA[class_num][subject_index]
     user_id = str(query.from_user.id)
     
+    # Проверяем, есть ли предмет в избранном
     is_favorite = False
     if user_id in user_favorites:
         is_favorite = any(fav['url'] == subject['url'] for fav in user_favorites[user_id])
@@ -314,16 +408,30 @@ async def show_subject_info(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 *Класс:* {class_num}
 
 [Ссылка на ГДЗ]({subject['url']})
+
+💡 *Хотите больше функций?*
+Откройте *Mini App* для поиска и удобной навигации прямо в Telegram!
     """
     
+    # Создаем кнопки
     keyboard = []
     
+    # Кнопка избранного
     favorite_text = "❌ Удалить из избранного" if is_favorite else "⭐ Добавить в избранное"
     favorite_callback = f"remove_fav_{class_num}_{subject_index}" if is_favorite else f"add_fav_{class_num}_{subject_index}"
     keyboard.append([InlineKeyboardButton(favorite_text, callback_data=favorite_callback)])
     
+    # Кнопка "Открыть ссылку"
     keyboard.append([InlineKeyboardButton("🔗 Открыть ГДЗ", url=subject['url'])])
     
+    # WebApp кнопка для Mini App
+    web_app_button = InlineKeyboardButton(
+        "📱 Открыть Mini App", 
+        web_app=WebAppInfo(url=WEB_APP_URL)
+    )
+    keyboard.append([web_app_button])
+    
+    # Кнопки навигации
     keyboard.append([
         InlineKeyboardButton("◀️ Назад к предметам", callback_data=f"class_{class_num}"),
         InlineKeyboardButton("🏠 Главная", callback_data="back_to_main")
@@ -351,14 +459,19 @@ async def add_to_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     subject = SUBJECTS_DATA[class_num][subject_index]
     user_id = str(query.from_user.id)
     
+    # Инициализируем список избранного для пользователя, если его нет
     if user_id not in user_favorites:
         user_favorites[user_id] = []
     
+    # Проверяем, не добавлен ли уже предмет
     if not any(fav['url'] == subject['url'] for fav in user_favorites[user_id]):
+        # Добавляем информацию о классе в предмет
         subject_with_class = subject.copy()
         subject_with_class['class'] = class_num
         user_favorites[user_id].append(subject_with_class)
+        save_favorites()
     
+    # Показываем обновленную информацию о предмете
     await show_subject_info(update, context)
 
 # Удалить из избранного
@@ -374,9 +487,12 @@ async def remove_from_favorites(update: Update, context: ContextTypes.DEFAULT_TY
     subject = SUBJECTS_DATA[class_num][subject_index]
     user_id = str(query.from_user.id)
     
+    # Удаляем предмет из избранного
     if user_id in user_favorites:
         user_favorites[user_id] = [fav for fav in user_favorites[user_id] if fav['url'] != subject['url']]
+        save_favorites()
     
+    # Показываем обновленную информацию о предмете
     await show_subject_info(update, context)
 
 # Показать избранное
@@ -390,23 +506,31 @@ async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 У вас пока нет избранных предметов.
 
-*Совет:*
+💡 *Совет:*
 Добавляйте предметы в избранное для быстрого доступа!
+А еще больше функций в нашем *Mini App* прямо в Telegram!
         """
         
+        # WebApp кнопка для Mini App
+        web_app_button = InlineKeyboardButton(
+            "📱 Открыть Mini App", 
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+        
         keyboard = [
-            [InlineKeyboardButton("📱 Mini App", web_app=WebAppInfo(url=WEB_APP_URL))],
+            [web_app_button],
             [InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")]
         ]
     else:
         text = "⭐ *Ваше избранное:*\n\n"
         keyboard = []
         
-        for i, subject in enumerate(user_favorites[user_id][:10]):
+        for i, subject in enumerate(user_favorites[user_id][:10]):  # Ограничение 10 предметов
             text += f"{subject['icon']} *{subject['name']}*\n"
             text += f"Автор: {subject['author']} | Класс: {subject['class']}\n"
             text += f"[Ссылка]({subject['url']})\n\n"
             
+            # Находим индекс предмета в основном списке
             subjects = SUBJECTS_DATA.get(subject['class'], [])
             for idx, subj in enumerate(subjects):
                 if subj['url'] == subject['url']:
@@ -418,8 +542,17 @@ async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     ])
                     break
         
+        text += "\n💡 *Еще больше функций в Mini App прямо в Telegram!*"
+        
+        # WebApp кнопка для Mini App
+        web_app_button = InlineKeyboardButton(
+            "📱 Открыть Mini App", 
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+        
+        # Кнопка очистки избранного
         keyboard.append([InlineKeyboardButton("🗑️ Очистить избранное", callback_data="clear_favorites")])
-        keyboard.append([InlineKeyboardButton("📱 Mini App", web_app=WebAppInfo(url=WEB_APP_URL))])
+        keyboard.append([web_app_button])
     
     keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")])
     
@@ -450,35 +583,53 @@ async def clear_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     if user_id in user_favorites:
         user_favorites[user_id] = []
+        save_favorites()
         await query.answer("✅ Избранное очищено!")
     
     await show_favorites(update, context)
+
+# Открыть Mini App (через callback)
+async def open_miniapp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Открыть Mini App через callback"""
+    await app_command(update, context)
 
 # Обработчик текстовых сообщений
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик текстовых сообщений"""
     text = update.message.text.lower()
     
-    if text in ["привет", "начать", "старт", "start"]:
+    if text in ["привет", "начать", "старт", "start", "здравствуйте"]:
         await start(update, context)
-    elif text in ["помощь", "help"]:
+    elif text in ["помощь", "help", "справка"]:
         await help_command(update, context)
-    elif text in ["miniapp", "мини апп", "приложение", "app"]:
+    elif text in ["miniapp", "мини апп", "приложение", "app", "мини-апп"]:
         await app_command(update, context)
-    elif text in ["классы", "предметы", "classes"]:
+    elif text in ["webapp", "веб", "сайт", "web", "браузер"]:
+        await webapp_command(update, context)
+    elif text in ["классы", "предметы", "classes", "уроки"]:
         await show_classes(update, context)
-    elif text in ["избранное", "favorites", "fav"]:
+    elif text in ["избранное", "favorites", "fav", "избранное", "закладки"]:
         await show_favorites(update, context)
+    elif text in ["7", "7 класс"]:
+        await show_class_subjects(update, context, "7")
+    elif text in ["8", "8 класс"]:
+        await show_class_subjects(update, context, "8")
+    elif text in ["9", "9 класс"]:
+        await show_class_subjects(update, context, "9")
     else:
+        # Если неизвестное сообщение, предлагаем Mini App
         reply_text = """
 🤔 Не совсем понимаю ваш запрос.
 
 *Попробуйте:*
 • Выбрать класс через меню
-• Открыть *Mini App* для поиска
+• Открыть *Mini App* для поиска прямо в Telegram
 • Использовать команду /help
+
+*Или напишите:* привет, помощь, miniapp
         """
         
+        # WebApp кнопка для Mini App
         web_app_button = InlineKeyboardButton(
             "📱 Открыть Mini App", 
             web_app=WebAppInfo(url=WEB_APP_URL)
@@ -506,89 +657,139 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     data = query.data
     
-    if data == "back_to_main":
-        await start(update, context)
-    elif data == "classes":
-        await show_classes(update, context)
-    elif data.startswith("class_"):
-        class_num = data.split("_")[1]
-        await show_class_subjects(update, context, class_num)
-    elif data.startswith("subject_"):
-        await show_subject_info(update, context)
-    elif data.startswith("add_fav_"):
-        await add_to_favorites(update, context)
-    elif data.startswith("remove_fav_"):
-        await remove_from_favorites(update, context)
-    elif data == "favorites":
-        await show_favorites(update, context)
-    elif data == "clear_favorites":
-        await clear_favorites(update, context)
-    elif data == "help":
-        await help_command(update, context)
+    try:
+        if data == "back_to_main":
+            await start(update, context)
+        elif data == "classes":
+            await show_classes(update, context)
+        elif data.startswith("class_"):
+            class_num = data.split("_")[1]
+            await show_class_subjects(update, context, class_num)
+        elif data.startswith("subject_"):
+            await show_subject_info(update, context)
+        elif data.startswith("add_fav_"):
+            await add_to_favorites(update, context)
+        elif data.startswith("remove_fav_"):
+            await remove_from_favorites(update, context)
+        elif data == "favorites":
+            await show_favorites(update, context)
+        elif data == "open_miniapp":
+            await open_miniapp(update, context)
+        elif data == "clear_favorites":
+            await clear_favorites(update, context)
+        elif data == "help":
+            await help_command(update, context)
+        elif data == "back":
+            await show_classes(update, context)
+    except Exception as e:
+        logger.error(f"Error in callback: {e}")
+        await query.answer("❌ Произошла ошибка. Попробуйте снова.")
 
-# Главная функция
-def main() -> None:
-    """Запуск бота"""
+# Функция для безопасного запуска
+def run_bot():
+    """Запуск бота с обработкой ошибок"""
     # Получаем токен из переменных окружения
-    TOKEN = os.environ.get("BOT_TOKEN")
+    TOKEN = os.environ.get("BOT_TOKEN", "8456034289:AAFocvpSevSlavQh_FJnbyJ-WdpVa4Zw9Hw")
     
     if not TOKEN:
         logger.error("❌ Ошибка: Токен бота не найден!")
-        logger.error("📝 Установите переменную окружения BOT_TOKEN на Render.com")
-        print("=" * 50)
-        print("❌ ОШИБКА: Токен бота не найден!")
-        print("📝 На Render.com добавьте переменную окружения:")
-        print("   Key: BOT_TOKEN")
-        print("   Value: ваш_токен_бота")
-        print("=" * 50)
+        logger.error("📝 Установите переменную окружения BOT_TOKEN или укажите токен в коде")
         return
     
     # Проверяем URL Mini App
     if WEB_APP_URL == "https://ваш-mini-app-url.com":
-        logger.warning("⚠️ Укажите реальный URL вашего Mini App!")
+        logger.warning("⚠️ ВНИМАНИЕ: Укажите реальный URL вашего Mini App!")
+        logger.warning(f"📱 Текущий URL: {WEB_APP_URL}")
     
-    try:
-        # Создаем приложение
-        application = Application.builder().token(TOKEN).build()
-        
-        # Регистрируем обработчики команд
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("classes", show_classes))
-        application.add_handler(CommandHandler("favorites", show_favorites))
-        application.add_handler(CommandHandler("app", app_command))
-        application.add_handler(CommandHandler("miniapp", app_command))
-        
-        # Регистрируем обработчики callback запросов
-        application.add_handler(CallbackQueryHandler(button_callback))
-        
-        # Регистрируем обработчик текстовых сообщений
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-        
-        # Запускаем бота
-        print("=" * 50)
-        print("🎉 ГДЗ Навигатор Бот запускается...")
-        print(f"🤖 Используется токен: {TOKEN[:10]}...")
-        print(f"📱 Mini App URL: {WEB_APP_URL}")
-        print("=" * 50)
-        print("✅ Бот готов к работе на Render.com!")
-        print("👉 Отправьте /start в Telegram")
-        print("=" * 50)
-        
-        # Важно для Render: запускаем polling
-        application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка при запуске бота: {e}")
-        print(f"\n🔧 Детали ошибки: {e}")
-        print("\n📝 Проверьте:")
-        print("1. Правильность токена бота")
-        print("2. Подключение к интернету")
-        print("3. Доступность Telegram API")
+    retry_count = 0
+    max_retries = 5
+    
+    while retry_count < max_retries:
+        try:
+            logger.info(f"🚀 Запуск бота... Попытка {retry_count + 1}/{max_retries}")
+            
+            # Создаем приложение
+            application = Application.builder().token(TOKEN).build()
+            
+            # Регистрируем обработчики команд
+            application.add_handler(CommandHandler("start", start))
+            application.add_handler(CommandHandler("help", help_command))
+            application.add_handler(CommandHandler("classes", show_classes))
+            application.add_handler(CommandHandler("favorites", show_favorites))
+            application.add_handler(CommandHandler("app", app_command))
+            application.add_handler(CommandHandler("miniapp", app_command))  # Алиас
+            application.add_handler(CommandHandler("webapp", webapp_command))
+            application.add_handler(CommandHandler("web", webapp_command))  # Алиас
+            
+            # Регистрируем обработчики callback запросов
+            application.add_handler(CallbackQueryHandler(button_callback))
+            
+            # Регистрируем обработчик текстовых сообщений
+            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+            
+            # Запускаем бота с настройками для PythonAnywhere
+            logger.info("=" * 50)
+            logger.info("🎉 ГДЗ Навигатор Бот запущен на PythonAnywhere!")
+            logger.info(f"🤖 Токен: {TOKEN[:10]}...")
+            logger.info(f"📱 Mini App URL: {WEB_APP_URL}")
+            logger.info("=" * 50)
+            logger.info("✅ Бот готов к работе!")
+            logger.info("👉 Отправьте /start в Telegram")
+            logger.info("=" * 50)
+            
+            application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,
+                timeout=30,
+                pool_timeout=30,
+                close_loop=False
+            )
+            
+            # Если бот завершился без ошибок, выходим
+            break
+            
+        except Exception as e:
+            retry_count += 1
+            logger.error(f"❌ Ошибка при запуске бота: {e}")
+            logger.error(f"📋 Подробности: {type(e).__name__}")
+            
+            if retry_count < max_retries:
+                wait_time = retry_count * 10  # Увеличиваем время ожидания
+                logger.info(f"🔄 Перезапуск через {wait_time} секунд...")
+                import time
+                time.sleep(wait_time)
+            else:
+                logger.error("❌ Превышено максимальное количество попыток запуска")
+                logger.error("💡 Проверьте токен и интернет-подключение")
 
-# Запуск приложения
+# Главная функция
+def main():
+    """Основная функция запуска"""
+    # Для PythonAnywhere добавляем обработку сигналов
+    import signal
+    
+    def signal_handler(signum, frame):
+        logger.info(f"📞 Получен сигнал {signum}. Завершение работы...")
+        save_favorites()
+        sys.exit(0)
+    
+    # Регистрируем обработчики сигналов
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Запускаем бота
+    run_bot()
+
 if __name__ == "__main__":
+    print("=" * 50)
+    print("🤖 ГДЗ Навигатор Бот для PythonAnywhere")
+    print("=" * 50)
+    
+    # Проверяем наличие необходимых файлов
+    if not os.path.exists('favorites.json'):
+        print("📁 Создаю файл favorites.json...")
+        with open('favorites.json', 'w', encoding='utf-8') as f:
+            json.dump({}, f)
+    
+    # Запускаем основную функцию
     main()
