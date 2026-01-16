@@ -1,4 +1,4 @@
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const express = require('express');
 require('dotenv').config();
 
@@ -40,8 +40,19 @@ const WEB_APP_URL = process.env.WEB_APP_URL || "https://razetka2010.github.io/gd
 // Хранилище избранного (в памяти)
 const userFavorites = {};
 
-// Инициализация бота
-const bot = new Telegraf(process.env.BOT_TOKEN);
+// Проверка токена
+if (!process.env.BOT_TOKEN) {
+  console.error('❌ ОШИБКА: BOT_TOKEN не найден в переменных окружения!');
+  console.log('\n📝 Добавьте в Render Environment Variables:');
+  console.log('Key: BOT_TOKEN');
+  console.log('Value: ваш_токен_бота');
+  process.exit(1);
+}
+
+// Инициализация бота с правильными опциями
+const bot = new Telegraf(process.env.BOT_TOKEN, {
+  telegram: { webhookReply: false }
+});
 
 // Express веб-сервер
 app.use(express.json());
@@ -132,7 +143,9 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-// Команда /start
+// =================== КОМАНДЫ БОТА ===================
+
+// Команда /start - ГЛАВНОЕ МЕНЮ С КНОПКАМИ
 bot.start(async (ctx) => {
   const welcomeText = `
 📚 *Привет, ${ctx.from.first_name}!* 🎉
@@ -155,52 +168,34 @@ bot.start(async (ctx) => {
 /status - Статус бота
   `;
 
-  const keyboard = Markup.inlineKeyboard([
-    [
-      Markup.button.callback('7 класс', 'class_7'),
-      Markup.button.callback('8 класс', 'class_8'),
-      Markup.button.callback('9 класс', 'class_9')
-    ],
-    [
-      Markup.button.webApp('📱 Открыть Web App', WEB_APP_URL),
-      Markup.button.callback('⭐ Избранное', 'favorites')
-    ],
-    [
-      Markup.button.url('🌐 Web версия', WEB_APP_URL),
-      Markup.button.callback('ℹ️ Помощь', 'help')
-    ],
-    [
-      Markup.button.callback('📊 Статус', 'bot_status'),
-      Markup.button.callback('🔄 Обновить', 'refresh')
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "7 класс", callback_data: "class_7" },
+        { text: "8 класс", callback_data: "class_8" },
+        { text: "9 класс", callback_data: "class_9" }
+      ],
+      [
+        { text: "📱 Открыть Web App", web_app: { url: WEB_APP_URL } },
+        { text: "⭐ Избранное", callback_data: "favorites" }
+      ],
+      [
+        { text: "🌐 Web версия", url: WEB_APP_URL },
+        { text: "ℹ️ Помощь", callback_data: "help" }
+      ],
+      [
+        { text: "📊 Статус", callback_data: "status" },
+        { text: "🔄 Обновить", callback_data: "refresh" }
+      ]
     ]
-  ]);
+  };
 
-  await ctx.replyWithMarkdown(welcomeText, keyboard);
-});
-
-// Команда /webapp
-bot.command('webapp', async (ctx) => {
-  const text = `
-🚀 *Открываем Web App...*
-
-Нажмите кнопку ниже, чтобы открыть полную версию ГДЗ Навигатора!
-
-*В Web App доступно:*
-✅ Удобный интерфейс с поиском
-✅ Все предметы 7-9 классов
-✅ Сохранение избранного
-✅ Быстрая навигация
-  `;
-
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.webApp('🎯 Открыть Web App в Telegram', WEB_APP_URL)],
-    [
-      Markup.button.url('🌐 Открыть в браузере', WEB_APP_URL),
-      Markup.button.callback('◀️ Назад', 'back_to_main')
-    ]
-  ]);
-
-  await ctx.replyWithMarkdown(text, keyboard);
+  try {
+    await ctx.replyWithMarkdown(welcomeText, { reply_markup: keyboard });
+  } catch (error) {
+    console.error('Ошибка при отправке сообщения:', error);
+    await ctx.reply('Привет! Используйте команды: /start, /help, /classes, /status');
+  }
 });
 
 // Команда /help
@@ -229,15 +224,17 @@ bot.command('help', async (ctx) => {
 /status - Статус бота
   `;
 
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.webApp('📱 Открыть Web App в Telegram', WEB_APP_URL)],
-    [
-      Markup.button.url('🌐 Web версия', WEB_APP_URL),
-      Markup.button.callback('◀️ Назад', 'back_to_main')
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "📱 Открыть Web App в Telegram", web_app: { url: WEB_APP_URL } }],
+      [
+        { text: "🌐 Web версия", url: WEB_APP_URL },
+        { text: "◀️ Назад", callback_data: "back_to_main" }
+      ]
     ]
-  ]);
+  };
 
-  await ctx.replyWithMarkdown(helpText, keyboard);
+  await ctx.replyWithMarkdown(helpText, { reply_markup: keyboard });
 });
 
 // Команда /status
@@ -257,45 +254,193 @@ bot.command('status', async (ctx) => {
 
 *Ссылки:*
 • Web версия: ${WEB_APP_URL}
-• Render Dashboard: https://dashboard.render.com
 • Health check: ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT}/health
 
 *Бот работает стабильно!* 🚀
   `;
 
-  const keyboard = Markup.inlineKeyboard([
-    [
-      Markup.button.callback('🔄 Обновить статус', 'bot_status'),
-      Markup.button.callback('🏠 Главная', 'back_to_main')
-    ],
-    [
-      Markup.button.url('🌐 Render Dashboard', 'https://dashboard.render.com'),
-      Markup.button.webApp('📱 Web App', WEB_APP_URL)
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "🔄 Обновить статус", callback_data: "status" },
+        { text: "🏠 Главная", callback_data: "back_to_main" }
+      ],
+      [
+        { text: "🌐 Открыть Web App", web_app: { url: WEB_APP_URL } },
+        { text: "📚 Выбрать класс", callback_data: "classes" }
+      ]
     ]
-  ]);
+  };
 
-  await ctx.replyWithMarkdown(statusText, keyboard);
+  await ctx.replyWithMarkdown(statusText, { reply_markup: keyboard });
 });
 
 // Команда /classes
 bot.command('classes', async (ctx) => {
   const text = "📚 *Выберите класс:*\n\nДля поиска и расширенного функционала откройте *Web App*!";
   
-  const keyboard = Markup.inlineKeyboard([
-    [
-      Markup.button.callback('7 класс', 'class_7'),
-      Markup.button.callback('8 класс', 'class_8'),
-      Markup.button.callback('9 класс', 'class_9')
-    ],
-    [
-      Markup.button.webApp('📱 Web App', WEB_APP_URL),
-      Markup.button.callback('⭐ Избранное', 'favorites')
-    ],
-    [Markup.button.callback('◀️ Назад', 'back_to_main')]
-  ]);
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "7 класс", callback_data: "class_7" },
+        { text: "8 класс", callback_data: "class_8" },
+        { text: "9 класс", callback_data: "class_9" }
+      ],
+      [
+        { text: "📱 Web App", web_app: { url: WEB_APP_URL } },
+        { text: "⭐ Избранное", callback_data: "favorites" }
+      ],
+      [{ text: "◀️ Назад", callback_data: "back_to_main" }]
+    ]
+  };
 
-  await ctx.replyWithMarkdown(text, keyboard);
+  await ctx.replyWithMarkdown(text, { reply_markup: keyboard });
 });
+
+// Команда /webapp
+bot.command('webapp', async (ctx) => {
+  const text = `
+🚀 *Открываем Web App...*
+
+Нажмите кнопку ниже, чтобы открыть полную версию ГДЗ Навигатора прямо в Telegram!
+
+*В Web App доступно:*
+✅ Удобный интерфейс с поиском
+✅ Все предметы 7-9 классов
+✅ Сохранение избранного
+✅ Быстрая навигация
+  `;
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "🎯 Открыть Web App в Telegram", web_app: { url: WEB_APP_URL } }],
+      [
+        { text: "🌐 Открыть в браузере", url: WEB_APP_URL },
+        { text: "◀️ Назад", callback_data: "back_to_main" }
+      ]
+    ]
+  };
+
+  await ctx.replyWithMarkdown(text, { reply_markup: keyboard });
+});
+
+// Команда /favorites
+bot.command('favorites', async (ctx) => {
+  await showFavorites(ctx);
+});
+
+// =================== ОБРАБОТЧИКИ CALLBACK ===================
+
+// Обработка всех callback запросов
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  const chatId = ctx.chat?.id;
+  
+  console.log(`Callback received: ${data} from user: ${ctx.from.id}`);
+  
+  try {
+    await ctx.answerCbQuery();
+    
+    if (data === 'back_to_main') {
+      await ctx.deleteMessage();
+      await bot.telegram.sendMessage(chatId, "Возвращаемся в главное меню...");
+      return bot.start(ctx);
+    }
+    
+    if (data === 'classes') {
+      return bot.command('classes', ctx);
+    }
+    
+    if (data.startsWith('class_')) {
+      const classNum = data.split('_')[1];
+      await showClassSubjects(ctx, classNum);
+      return;
+    }
+    
+    if (data.startsWith('subject_')) {
+      const parts = data.split('_');
+      const classNum = parts[1];
+      const subjectIndex = parseInt(parts[2]);
+      await showSubjectInfo(ctx, classNum, subjectIndex);
+      return;
+    }
+    
+    if (data.startsWith('add_fav_')) {
+      const parts = data.split('_');
+      const classNum = parts[2];
+      const subjectIndex = parseInt(parts[3]);
+      const subject = SUBJECTS_DATA[classNum][subjectIndex];
+      const userId = ctx.from.id.toString();
+      
+      if (!userFavorites[userId]) {
+        userFavorites[userId] = [];
+      }
+      
+      const exists = userFavorites[userId].some(fav => fav.url === subject.url);
+      if (!exists) {
+        userFavorites[userId].push({
+          ...subject,
+          class: classNum
+        });
+        await ctx.answerCbQuery('✅ Добавлено в избранное!');
+      } else {
+        await ctx.answerCbQuery('⚠️ Уже в избранном!');
+      }
+      
+      await showSubjectInfo(ctx, classNum, subjectIndex);
+      return;
+    }
+    
+    if (data.startsWith('remove_fav_')) {
+      const parts = data.split('_');
+      const classNum = parts[2];
+      const subjectIndex = parseInt(parts[3]);
+      const subject = SUBJECTS_DATA[classNum][subjectIndex];
+      const userId = ctx.from.id.toString();
+      
+      if (userFavorites[userId]) {
+        userFavorites[userId] = userFavorites[userId].filter(fav => fav.url !== subject.url);
+        await ctx.answerCbQuery('❌ Удалено из избранного!');
+      }
+      
+      await showSubjectInfo(ctx, classNum, subjectIndex);
+      return;
+    }
+    
+    if (data === 'favorites') {
+      await showFavorites(ctx);
+      return;
+    }
+    
+    if (data === 'clear_favorites') {
+      const userId = ctx.from.id.toString();
+      userFavorites[userId] = [];
+      await ctx.answerCbQuery('✅ Избранное очищено!');
+      await showFavorites(ctx);
+      return;
+    }
+    
+    if (data === 'help') {
+      return bot.command('help', ctx);
+    }
+    
+    if (data === 'status') {
+      return bot.command('status', ctx);
+    }
+    
+    if (data === 'refresh') {
+      await ctx.answerCbQuery('🔄 Меню обновлено!');
+      await ctx.deleteMessage();
+      return bot.start(ctx);
+    }
+    
+  } catch (error) {
+    console.error('Error handling callback:', error);
+    await ctx.answerCbQuery('⚠️ Произошла ошибка');
+  }
+});
+
+// =================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===================
 
 // Показать предметы класса
 async function showClassSubjects(ctx, classNum) {
@@ -314,20 +459,19 @@ async function showClassSubjects(ctx, classNum) {
     }
     
     const buttonText = isFavorite ? `⭐ ${subject.icon} ${subject.name}` : `${subject.icon} ${subject.name}`;
-    return [Markup.button.callback(buttonText, `subject_${classNum}_${index}`)];
+    return [{ text: buttonText, callback_data: `subject_${classNum}_${index}` }];
   });
   
   buttons.push([
-    Markup.button.webApp('📱 Web App', WEB_APP_URL),
-    Markup.button.callback('⭐ Избранное', 'favorites')
+    { text: "📱 Web App", web_app: { url: WEB_APP_URL } },
+    { text: "⭐ Избранное", callback_data: "favorites" }
   ]);
-  buttons.push([Markup.button.callback('◀️ Назад', 'classes')]);
+  buttons.push([{ text: "◀️ Назад", callback_data: "classes" }]);
   
-  const keyboard = Markup.inlineKeyboard(buttons);
-  
+  const keyboard = { inline_keyboard: buttons };
   const text = `📖 *${classNum} класс*\nВыберите предмет:\n\n*Для поиска используйте Web App!*`;
   
-  await ctx.replyWithMarkdown(text, keyboard);
+  await ctx.replyWithMarkdown(text, { reply_markup: keyboard });
 }
 
 // Показать информацию о предмете
@@ -355,18 +499,20 @@ ${subject.icon} *${subject.name}*
   const favoriteText = isFavorite ? '❌ Удалить из избранного' : '⭐ Добавить в избранное';
   const favoriteCallback = isFavorite ? `remove_fav_${classNum}_${subjectIndex}` : `add_fav_${classNum}_${subjectIndex}`;
   
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback(favoriteText, favoriteCallback)],
-    [Markup.button.url('🔗 Открыть ГДЗ', subject.url)],
-    [Markup.button.webApp('📱 Открыть Web App', WEB_APP_URL)],
-    [
-      Markup.button.callback('◀️ Назад к предметам', `class_${classNum}`),
-      Markup.button.callback('🏠 Главная', 'back_to_main')
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: favoriteText, callback_data: favoriteCallback }],
+      [{ text: "🔗 Открыть ГДЗ", url: subject.url }],
+      [{ text: "📱 Открыть Web App", web_app: { url: WEB_APP_URL } }],
+      [
+        { text: "◀️ Назад к предметам", callback_data: `class_${classNum}` },
+        { text: "🏠 Главная", callback_data: "back_to_main" }
+      ]
     ]
-  ]);
+  };
   
   await ctx.replyWithMarkdown(text, {
-    ...keyboard,
+    reply_markup: keyboard,
     disable_web_page_preview: true
   });
 }
@@ -387,12 +533,14 @@ async function showFavorites(ctx) {
 А еще больше функций в нашем *Web App* прямо в Telegram!
     `;
     
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.webApp('📱 Открыть Web App', WEB_APP_URL)],
-      [Markup.button.callback('◀️ Назад', 'back_to_main')]
-    ]);
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "📱 Открыть Web App", web_app: { url: WEB_APP_URL } }],
+        [{ text: "◀️ Назад", callback_data: "back_to_main" }]
+      ]
+    };
     
-    await ctx.replyWithMarkdown(text, keyboard);
+    await ctx.replyWithMarkdown(text, { reply_markup: keyboard });
     return;
   }
   
@@ -400,161 +548,36 @@ async function showFavorites(ctx) {
   const buttons = [];
   
   favorites.forEach((subject, index) => {
-    if (index < 10) { // Ограничиваем показ 10 предметами
+    if (index < 10) {
       text += `${subject.icon} *${subject.name}*\n`;
       text += `Автор: ${subject.author} | Класс: ${subject.class}\n`;
       text += `[Ссылка](${subject.url})\n\n`;
       
-      // Находим индекс предмета в основном массиве
       const subjects = SUBJECTS_DATA[subject.class] || [];
       const subjectIndex = subjects.findIndex(s => s.url === subject.url);
       
       if (subjectIndex !== -1) {
-        buttons.push([Markup.button.callback(
-          `${subject.icon} ${subject.name}`,
-          `subject_${subject.class}_${subjectIndex}`
-        )]);
+        buttons.push([{ 
+          text: `${subject.icon} ${subject.name}`,
+          callback_data: `subject_${subject.class}_${subjectIndex}`
+        }]);
       }
     }
   });
   
   text += "\n💡 *Еще больше функций в Web App прямо в Telegram!*";
   
-  buttons.push([Markup.button.callback('🗑️ Очистить избранное', 'clear_favorites')]);
-  buttons.push([Markup.button.webApp('📱 Открыть Web App', WEB_APP_URL)]);
-  buttons.push([Markup.button.callback('◀️ Назад', 'back_to_main')]);
+  buttons.push([{ text: "🗑️ Очистить избранное", callback_data: "clear_favorites" }]);
+  buttons.push([{ text: "📱 Открыть Web App", web_app: { url: WEB_APP_URL } }]);
+  buttons.push([{ text: "◀️ Назад", callback_data: "back_to_main" }]);
   
-  const keyboard = Markup.inlineKeyboard(buttons);
+  const keyboard = { inline_keyboard: buttons };
   
   await ctx.replyWithMarkdown(text, {
-    ...keyboard,
+    reply_markup: keyboard,
     disable_web_page_preview: true
   });
 }
-
-// Обработка callback запросов
-bot.on('callback_query', async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  
-  try {
-    if (data === 'back_to_main') {
-      await ctx.deleteMessage();
-      await bot.telegram.sendMessage(ctx.chat.id, "Главное меню:", {
-        reply_markup: { remove_keyboard: true }
-      });
-      return bot.start(ctx);
-    }
-    
-    if (data === 'classes') {
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return bot.telegram.sendMessage(ctx.chat.id, "Выбор классов:", {
-        reply_markup: { remove_keyboard: true }
-      }).then(() => bot.command('classes', ctx));
-    }
-    
-    if (data.startsWith('class_')) {
-      const classNum = data.split('_')[1];
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return showClassSubjects(ctx, classNum);
-    }
-    
-    if (data.startsWith('subject_')) {
-      const parts = data.split('_');
-      const classNum = parts[1];
-      const subjectIndex = parseInt(parts[2]);
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return showSubjectInfo(ctx, classNum, subjectIndex);
-    }
-    
-    if (data.startsWith('add_fav_')) {
-      const parts = data.split('_');
-      const classNum = parts[2];
-      const subjectIndex = parseInt(parts[3]);
-      const subject = SUBJECTS_DATA[classNum][subjectIndex];
-      const userId = ctx.from.id.toString();
-      
-      if (!userFavorites[userId]) {
-        userFavorites[userId] = [];
-      }
-      
-      if (!userFavorites[userId].some(fav => fav.url === subject.url)) {
-        userFavorites[userId].push({
-          ...subject,
-          class: classNum
-        });
-      }
-      
-      await ctx.answerCbQuery('✅ Добавлено в избранное!');
-      await ctx.deleteMessage();
-      return showSubjectInfo(ctx, classNum, subjectIndex);
-    }
-    
-    if (data.startsWith('remove_fav_')) {
-      const parts = data.split('_');
-      const classNum = parts[2];
-      const subjectIndex = parseInt(parts[3]);
-      const subject = SUBJECTS_DATA[classNum][subjectIndex];
-      const userId = ctx.from.id.toString();
-      
-      if (userFavorites[userId]) {
-        userFavorites[userId] = userFavorites[userId].filter(fav => fav.url !== subject.url);
-      }
-      
-      await ctx.answerCbQuery('❌ Удалено из избранного!');
-      await ctx.deleteMessage();
-      return showSubjectInfo(ctx, classNum, subjectIndex);
-    }
-    
-    if (data === 'favorites') {
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return showFavorites(ctx);
-    }
-    
-    if (data === 'clear_favorites') {
-      const userId = ctx.from.id.toString();
-      userFavorites[userId] = [];
-      await ctx.answerCbQuery('✅ Избранное очищено!');
-      await ctx.deleteMessage();
-      return showFavorites(ctx);
-    }
-    
-    if (data === 'help') {
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return bot.telegram.sendMessage(ctx.chat.id, "Помощь:", {
-        reply_markup: { remove_keyboard: true }
-      }).then(() => bot.command('help', ctx));
-    }
-    
-    if (data === 'bot_status') {
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return bot.telegram.sendMessage(ctx.chat.id, "Статус бота:", {
-        reply_markup: { remove_keyboard: true }
-      }).then(() => bot.command('status', ctx));
-    }
-    
-    if (data === 'refresh') {
-      await ctx.answerCbQuery('🔄 Меню обновлено!');
-      await ctx.deleteMessage();
-      return bot.start(ctx);
-    }
-    
-    if (data === 'open_miniapp') {
-      await ctx.answerCbQuery();
-      await ctx.deleteMessage();
-      return bot.command('webapp', ctx);
-    }
-    
-  } catch (error) {
-    console.error('Error handling callback:', error);
-    await ctx.answerCbQuery('⚠️ Произошла ошибка');
-  }
-});
 
 // Обработка текстовых сообщений
 bot.on('text', async (ctx) => {
@@ -564,7 +587,7 @@ bot.on('text', async (ctx) => {
     return bot.start(ctx);
   } else if (['помощь', 'help', 'справка'].includes(text)) {
     return bot.command('help', ctx);
-  } else if (['webapp', 'веб', 'сайт', 'web', 'сайт', 'браузер', 'miniapp', 'мини апп', 'приложение', 'app', 'минияпп'].includes(text)) {
+  } else if (['webapp', 'веб', 'сайт', 'web', 'браузер', 'miniapp', 'мини апп', 'приложение', 'app', 'минияпп'].includes(text)) {
     return bot.command('webapp', ctx);
   } else if (['классы', 'предметы', 'classes', 'уроки', 'гдз'].includes(text)) {
     return bot.command('classes', ctx);
@@ -584,15 +607,17 @@ bot.on('text', async (ctx) => {
 *Или напишите:* привет, помощь, webapp, статус
     `;
     
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.webApp('📱 Открыть Web App', WEB_APP_URL)],
-      [
-        Markup.button.callback('📚 Выбрать класс', 'classes'),
-        Markup.button.callback('ℹ️ Помощь', 'help')
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "📱 Открыть Web App", web_app: { url: WEB_APP_URL } }],
+        [
+          { text: "📚 Выбрать класс", callback_data: "classes" },
+          { text: "ℹ️ Помощь", callback_data: "help" }
+        ]
       ]
-    ]);
+    };
     
-    await ctx.replyWithMarkdown(replyText, keyboard);
+    await ctx.replyWithMarkdown(replyText, { reply_markup: keyboard });
   }
 });
 
@@ -602,29 +627,14 @@ bot.catch((err, ctx) => {
   ctx.reply('⚠️ Произошла ошибка. Пожалуйста, попробуйте еще раз.');
 });
 
-// Запуск сервера
+// =================== ЗАПУСК СЕРВЕРА ===================
+
 async function startServer() {
   try {
     console.log('='.repeat(60));
     console.log('🚀 ГДЗ НАВИГАТОР БОТ - RENDER.COM');
-    console.log('📚 Версия 2.0 (Node.js)');
+    console.log('📚 Версия 3.0 (Node.js - Исправлены кнопки)');
     console.log('='.repeat(60));
-    
-    // Проверяем токен
-    if (!process.env.BOT_TOKEN) {
-      console.error('❌ ОШИБКА: BOT_TOKEN не найден в переменных окружения!');
-      console.log('\n📝 Как исправить в Render:');
-      console.log('1. Перейдите в Render Dashboard');
-      console.log('2. Выберите ваше приложение');
-      console.log('3. Перейдите в Environment');
-      console.log('4. Добавьте новую переменную:');
-      console.log('   Key: BOT_TOKEN');
-      console.log('   Value: ваш_токен_бота');
-      console.log('5. Нажмите Save');
-      console.log('6. Перезапустите деплой');
-      console.log('='.repeat(60));
-      process.exit(1);
-    }
     
     // Запускаем веб-сервер
     app.listen(PORT, () => {
@@ -637,12 +647,14 @@ async function startServer() {
     console.log('🤖 Запуск Telegram бота...');
     await bot.launch();
     console.log('✅ Telegram бот запущен!');
-    console.log(`👤 Бот: @${bot.botInfo.username}`);
+    
+    const botInfo = await bot.telegram.getMe();
+    console.log(`👤 Бот: @${botInfo.username}`);
     console.log(`📱 Web App URL: ${WEB_APP_URL}`);
     console.log('='.repeat(60));
     console.log('✅ Приложение готово к работе!');
     console.log('👉 Отправьте /start в Telegram');
-    console.log('👉 Веб-страница доступна по Render URL');
+    console.log('👉 Проверьте кнопки в меню');
     console.log('='.repeat(60));
     
     // Обработка сигналов для graceful shutdown
