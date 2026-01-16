@@ -1,10 +1,13 @@
-# bot.py - ГДЗ Навигатор Бот для Replit
+# bot.py - ГДЗ Навигатор Бот для Stormkit.io
 import os
 import logging
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
+from flask import Flask, render_template_string
+import time
+from threading import Thread
 
 # Настройка логирования
 logging.basicConfig(
@@ -13,10 +16,172 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# =================== FLASK ДЛЯ STORMKIT ===================
+
+# Создаем Flask приложение для Stormkit
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🤖 ГДЗ Навигатор Бот</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding: 50px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                min-height: 100vh;
+                margin: 0;
+            }
+            .container {
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                padding: 30px;
+                border-radius: 20px;
+                max-width: 600px;
+                margin: 0 auto;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            }
+            h1 {
+                font-size: 2.5em;
+                margin-bottom: 20px;
+            }
+            .status {
+                font-size: 1.5em;
+                color: #4CAF50;
+                font-weight: bold;
+                margin: 20px 0;
+            }
+            .info {
+                font-size: 1.1em;
+                line-height: 1.6;
+                margin: 20px 0;
+            }
+            .telegram-btn {
+                display: inline-block;
+                background: #0088cc;
+                color: white;
+                padding: 15px 30px;
+                text-decoration: none;
+                border-radius: 10px;
+                font-size: 1.2em;
+                margin-top: 20px;
+                transition: transform 0.3s;
+            }
+            .telegram-btn:hover {
+                transform: translateY(-3px);
+                background: #0077b5;
+            }
+            .footer {
+                margin-top: 30px;
+                font-size: 0.9em;
+                opacity: 0.8;
+            }
+            .bot-status {
+                background: rgba(255, 255, 255, 0.2);
+                padding: 10px;
+                border-radius: 10px;
+                margin: 20px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📚 ГДЗ Навигатор Бот</h1>
+            <div class="status">✅ БОТ АКТИВЕН И РАБОТАЕТ</div>
+            
+            <div class="bot-status">
+                <p>🤖 Telegram бот работает в фоновом режиме</p>
+                <p>📚 Классы: 7-9</p>
+                <p>⭐ Избранное: активна</p>
+                <p>📱 Mini App: доступен</p>
+            </div>
+            
+            <div class="info">
+                <p>🤖 Telegram-бот для поиска готовых домашних заданий</p>
+                <p>👨‍🎓 Для учеников 7-9 классов</p>
+                <p>📱 Удобный интерфейс с Mini App</p>
+                <p>⭐ Сохранение избранных предметов</p>
+            </div>
+            
+            <a href="https://t.me/gdz_navigator_bot" class="telegram-btn" target="_blank">
+                🔗 Перейти в Telegram-бота
+            </a>
+            
+            <div class="footer">
+                <p>🕐 Сервер активен с: {{ time_str }}</p>
+                <p>🚀 Размещено на Stormkit.io</p>
+                <p>📡 Статус: <span style="color: #4CAF50;">ONLINE</span></p>
+                <p>🔄 Последнее обновление: {{ update_time }}</p>
+            </div>
+        </div>
+        
+        <script>
+            // Авто-обновление времени
+            function updateTime() {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString();
+                const dateStr = now.toLocaleDateString();
+                document.getElementById('current-time').innerText = timeStr;
+                document.getElementById('current-date').innerText = dateStr;
+            }
+            
+            setInterval(updateTime, 1000);
+            updateTime();
+            
+            // Проверка статуса бота
+            async function checkBotStatus() {
+                try {
+                    const response = await fetch('/health');
+                    if (response.ok) {
+                        document.getElementById('bot-status').innerHTML = 
+                            '<span style="color: #4CAF50;">✅ Бот работает</span>';
+                    }
+                } catch (error) {
+                    document.getElementById('bot-status').innerHTML = 
+                        '<span style="color: #ff6b6b;">⚠️ Проверка статуса...</span>';
+                }
+            }
+            
+            // Проверяем статус каждые 30 секунд
+            setInterval(checkBotStatus, 30000);
+            checkBotStatus();
+        </script>
+    </body>
+    </html>
+    """, time_str=time.strftime("%d.%m.%Y"), update_time=time.strftime("%H:%M:%S"))
+
+@app.route('/health')
+def health():
+    """Эндпоинт для проверки здоровья"""
+    return 'OK', 200
+
+@app.route('/status')
+def status():
+    """Статус бота"""
+    return {
+        "status": "online",
+        "service": "gdz-navigator-bot",
+        "timestamp": time.time(),
+        "version": "1.0"
+    }
+
+def run_flask():
+    """Запуск Flask сервера в отдельном потоке"""
+    port = int(os.environ.get('PORT', 8080))
+    logger.info(f"🌐 Flask сервер запускается на порту {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
 # =================== КОНФИГУРАЦИЯ ===================
 
-# URL вашего Mini App (замените на реальный URL)
-WEB_APP_URL = "https://razetka2010.github.io/gdz-navigator/"
+# URL вашего Mini App
+WEB_APP_URL = os.environ.get("WEB_APP_URL", "https://razetka2010.github.io/gdz-navigator/")
 
 # Данные предметов
 SUBJECTS_DATA = {
@@ -48,119 +213,7 @@ SUBJECTS_DATA = {
 }
 
 # Хранилище для избранного (временное, для демонстрации)
-# В реальном проекте используйте базу данных
 user_favorites = {}
-
-# =================== KEEP ALIVE ДЛЯ REPLIT ===================
-try:
-    from flask import Flask
-    from threading import Thread
-    import time
-    
-    app = Flask('')
-    
-    @app.route('/')
-    def home():
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>🤖 ГДЗ Навигатор Бот</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    text-align: center;
-                    padding: 50px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                }
-                .container {
-                    background: rgba(255, 255, 255, 0.1);
-                    backdrop-filter: blur(10px);
-                    padding: 30px;
-                    border-radius: 20px;
-                    max-width: 600px;
-                    margin: 0 auto;
-                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-                }
-                h1 {
-                    font-size: 2.5em;
-                    margin-bottom: 20px;
-                }
-                .status {
-                    font-size: 1.5em;
-                    color: #4CAF50;
-                    font-weight: bold;
-                    margin: 20px 0;
-                }
-                .info {
-                    font-size: 1.1em;
-                    line-height: 1.6;
-                    margin: 20px 0;
-                }
-                .telegram-btn {
-                    display: inline-block;
-                    background: #0088cc;
-                    color: white;
-                    padding: 15px 30px;
-                    text-decoration: none;
-                    border-radius: 10px;
-                    font-size: 1.2em;
-                    margin-top: 20px;
-                    transition: transform 0.3s;
-                }
-                .telegram-btn:hover {
-                    transform: translateY(-3px);
-                    background: #0077b5;
-                }
-                .footer {
-                    margin-top: 30px;
-                    font-size: 0.9em;
-                    opacity: 0.8;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>📚 ГДЗ Навигатор Бот</h1>
-                <div class="status">✅ БОТ АКТИВЕН И РАБОТАЕТ</div>
-                <div class="info">
-                    <p>🤖 Telegram-бот для поиска готовых домашних заданий</p>
-                    <p>👨‍🎓 Для учеников 7-9 классов</p>
-                    <p>📱 Удобный интерфейс с Mini App</p>
-                    <p>⭐ Сохранение избранных предметов</p>
-                </div>
-                <a href="https://t.me/gdz_navigator_bot" class="telegram-btn" target="_blank">
-                    🔗 Перейти в Telegram-бота
-                </a>
-                <div class="footer">
-                    <p>Сервер активен с: """ + time.strftime("%d.%m.%Y %H:%M:%S") + """</p>
-                    <p>🔄 Uptime проверяется каждые 5 минут</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-    
-    @app.route('/health')
-    def health():
-        return 'OK', 200
-    
-    def run_flask():
-        port = int(os.environ.get('PORT', 8080))
-        app.run(host='0.0.0.0', port=port, debug=False)
-    
-    def keep_alive():
-        t = Thread(target=run_flask, daemon=True)
-        t.start()
-        logger.info(f"🌐 Keep-alive сервер запущен на порту {os.environ.get('PORT', 8080)}")
-    
-    USE_KEEP_ALIVE = True
-except ImportError as e:
-    logger.warning(f"⚠️ Flask не установлен: {e}")
-    USE_KEEP_ALIVE = False
-    print("ℹ️ Запуск без веб-интерфейса")
 
 # =================== ОСНОВНЫЕ ФУНКЦИИ БОТА ===================
 
@@ -168,7 +221,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start"""
     user = update.effective_user
     welcome_text = f"""
-📚 *Привет, {user.first_name}!*
+📚 *Привет, {user.first_name}!* 🎉
 
 Я - *ГДЗ Навигатор Бот* 🤖
 Помогу найти готовые домашние задания для 7-9 классов.
@@ -186,8 +239,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 /app - Открыть Mini App прямо здесь
 /webapp - Открыть Web версию
 /help - Помощь
+/status - Статус бота
 
-Нажмите "📱 Mini App" для полного функционала в Telegram!
+*Наш бот работает на Stormkit.io - стабильно и надежно!*
     """
     
     # Создаем WebApp кнопку для открытия Mini App
@@ -209,6 +263,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [
             InlineKeyboardButton("🌐 Web версия", url=WEB_APP_URL),
             InlineKeyboardButton("ℹ️ Помощь", callback_data="help")
+        ],
+        [
+            InlineKeyboardButton("📊 Статус", callback_data="bot_status"),
+            InlineKeyboardButton("🔄 Обновить", callback_data="refresh")
         ]
     ]
     
@@ -315,7 +373,7 @@ async def webapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /help"""
     help_text = f"""
-*Помощь по использованию бота*
+*Помощь по использованию бота* 🆘
 
 *Доступны две версии:*
 1. *Бот* - быстрый доступ к основным предметам
@@ -340,6 +398,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /app - Открыть Mini App в Telegram
 /webapp - Открыть Web версию
 /help - Эта справка
+/status - Статус бота
     """
     
     web_app_button = InlineKeyboardButton(
@@ -366,6 +425,55 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     else:
         await update.callback_query.edit_message_text(
             help_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать статус бота"""
+    user_id = update.effective_user.id
+    favorites_count = len(user_favorites.get(str(user_id), []))
+    
+    status_text = f"""
+📊 *Статус бота*
+
+✅ *Состояние:* Активен
+⚡ *Хостинг:* Stormkit.io
+📚 *Классы:* 7-9
+📱 *Mini App:* Доступен
+⭐ *Избранное:* {favorites_count} предметов
+🕐 *Время:* {time.strftime("%H:%M:%S")}
+
+*Ссылки:*
+• Web версия: {WEB_APP_URL}
+• Stormkit статус: https://healerweak-wqewfo.stormkit.dev
+• Health check: https://healerweak-wqewfo.stormkit.dev/health
+
+*Бот работает стабильно!* 🚀
+    """
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🔄 Обновить статус", callback_data="bot_status"),
+            InlineKeyboardButton("🏠 Главная", callback_data="back_to_main")
+        ],
+        [
+            InlineKeyboardButton("🌐 Открыть Stormkit", url="https://healerweak-wqewfo.stormkit.dev"),
+            InlineKeyboardButton("📱 Mini App", callback_data="open_miniapp")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.message:
+        await update.message.reply_text(
+            status_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await update.callback_query.edit_message_text(
+            status_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN
         )
@@ -648,6 +756,12 @@ async def open_miniapp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Открыть Mini App через callback"""
     await app_command(update, context)
 
+async def refresh_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обновить меню"""
+    query = update.callback_query
+    await query.answer("🔄 Меню обновлено!")
+    await start(update, context)
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик текстовых сообщений"""
     text = update.message.text.lower()
@@ -665,15 +779,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif text in ["избранное", "favorites", "fav", "любимые", "закладки"]:
         await show_favorites(update, context)
     elif text in ["статус", "status", "работа", "бот"]:
-        await update.message.reply_text(
-            "✅ *Бот работает нормально!*\n\n"
-            f"🤖 Версия: ГДЗ Навигатор 1.0\n"
-            f"📚 Классы: 7-9\n"
-            f"📱 Mini App: {WEB_APP_URL}\n"
-            f"⭐ Избранное: {len(user_favorites.get(str(update.effective_user.id), []))} предметов\n\n"
-            "Используйте команду /help для списка команд.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await status_command(update, context)
     else:
         reply_text = """
 🤔 Не совсем понимаю ваш запрос.
@@ -733,6 +839,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await clear_favorites(update, context)
     elif data == "help":
         await help_command(update, context)
+    elif data == "bot_status":
+        await status_command(update, context)
+    elif data == "refresh":
+        await refresh_menu(update, context)
     elif data == "back":
         await show_classes(update, context)
 
@@ -759,27 +869,23 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def run_bot():
     """Запуск Telegram бота"""
-    # Получаем токен из переменных окружения Replit
+    # Получаем токен из переменных окружения
     TOKEN = os.environ.get("BOT_TOKEN")
     
     if not TOKEN:
         logger.error("❌ Токен бота не найден!")
-        logger.error("📝 Создайте переменную окружения BOT_TOKEN в Secrets Replit")
-        logger.error("📝 Инструкция: Secrets → New Secret")
-        logger.error("📝 Ключ: BOT_TOKEN, Значение: ваш_токен_бота")
+        logger.error("📝 Установите переменную окружения BOT_TOKEN в Stormkit")
         print("=" * 50)
         print("❌ ОШИБКА: Токен бота не найден!")
-        print("👉 Создайте переменную окружения BOT_TOKEN в Replit Secrets")
-        print("👉 Перейдите в Tools → Secrets → Add new secret")
-        print("👉 Key: BOT_TOKEN, Value: ваш_токен_бота")
+        print("👉 Установите переменную BOT_TOKEN в Stormkit Environment Variables")
         print("=" * 50)
         return
     
     try:
-        # Запускаем keep-alive сервер для Replit
-        if USE_KEEP_ALIVE:
-            keep_alive()
-            print("✅ Keep-alive сервер запущен")
+        # Запускаем Flask в отдельном потоке
+        flask_thread = Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        logger.info("🌐 Flask сервер запущен в отдельном потоке")
         
         # Создаем приложение
         application = Application.builder().token(TOKEN).build()
@@ -796,7 +902,7 @@ def run_bot():
         application.add_handler(CommandHandler("miniapp", app_command))
         application.add_handler(CommandHandler("webapp", webapp_command))
         application.add_handler(CommandHandler("web", webapp_command))
-        application.add_handler(CommandHandler("status", lambda u, c: u.message.reply_text("✅ Бот работает!")))
+        application.add_handler(CommandHandler("status", status_command))
         
         # Регистрируем обработчики callback запросов
         application.add_handler(CallbackQueryHandler(button_callback))
@@ -806,52 +912,60 @@ def run_bot():
         
         # Запускаем бота
         print("=" * 50)
-        print("🎉 ГДЗ Навигатор Бот запущен!")
+        print("🎉 ГДЗ Навигатор Бот запущен на Stormkit.io!")
         print(f"🤖 Токен: {TOKEN[:10]}...")
         print(f"👤 Бот: @{application.bot.username}")
         print(f"📱 Mini App URL: {WEB_APP_URL}")
-        print(f"🌐 Keep-alive: {'Включен' if USE_KEEP_ALIVE else 'Выключен'}")
+        print(f"🌐 Web URL: https://healerweak-wqewfo.stormkit.dev")
+        print(f"🩺 Health check: https://healerweak-wqewfo.stormkit.dev/health")
         print("=" * 50)
         print("✅ Бот готов к работе!")
         print("👉 Отправьте /start в Telegram")
-        print("👉 Веб-страница доступна по URL Replit")
+        print("👉 Веб-страница доступна по Stormkit URL")
         print("=" * 50)
         
         # Запускаем polling
-        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES, 
+            drop_pending_updates=True,
+            close_loop=False
+        )
         
     except Exception as e:
         logger.error(f"❌ Ошибка при запуске бота: {e}")
         print(f"\n🔧 Детали ошибки: {e}")
         print("\n🔧 Советы по устранению:")
-        print("1. Проверьте токен бота в Secrets")
-        print("2. Установите зависимости: pip install -r requirements.txt")
+        print("1. Проверьте токен бота в Stormkit Environment Variables")
+        print("2. Убедитесь, что бот создан через @BotFather")
         print("3. Проверьте интернет-подключение")
-        print("4. Убедитесь, что бот создан через @BotFather")
-        print("5. Проверьте логи в консоли Replit")
+        print("4. Проверьте логи в Stormkit Dashboard")
 
 # =================== ГЛАВНЫЙ БЛОК ===================
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("🤖 Запуск ГДЗ Навигатор Бота...")
-    print("📚 Версия 1.0 (Оптимизировано для Replit)")
+    print("🤖 Запуск ГДЗ Навигатор Бота на Stormkit.io...")
+    print("📚 Версия 2.0 (Оптимизировано для Stormkit)")
     print("👨‍💻 Разработчик: GDZ Navigator Team")
+    print("🚀 Хостинг: Stormkit.io")
     print("=" * 50)
     
     # Проверяем наличие токена
     TOKEN = os.environ.get("BOT_TOKEN")
     if not TOKEN:
         print("⚠️ ВНИМАНИЕ: BOT_TOKEN не найден в переменных окружения!")
-        print("\n📝 Как исправить в Replit:")
-        print("1. Нажмите на иконку 🔒 'Secrets' слева")
-        print("2. Нажмите 'Add a new secret'")
-        print("3. В поле Key введите: BOT_TOKEN")
-        print("4. В поле Value введите ваш токен бота")
-        print("5. Нажмите 'Add secret'")
-        print("6. Перезапустите Repl (Stop → Run)")
+        print("\n📝 Как исправить в Stormkit:")
+        print("1. Перейдите в Stormkit Dashboard")
+        print("2. Выберите ваше приложение")
+        print("3. Перейдите в Environment Variables")
+        print("4. Добавьте новую переменную:")
+        print("   Key: BOT_TOKEN")
+        print("   Value: ваш_токен_бота")
+        print("5. Нажмите Save")
+        print("6. Перезапустите деплой")
         print("\n🔑 Ваш токен должен начинаться с: 8456034289...")
         print("=" * 50)
+        print("🌐 Web интерфейс будет доступен, но бот не запустится без токена!")
     
     # Запускаем бота
     run_bot()
