@@ -1,17 +1,14 @@
 services:
   - type: web
-    name: gdz-bot-simple
+    name: gdz-bot-working
     env: node
     region: frankfurt
     plan: free
     buildCommand: npm install
-    startCommand: node bot.js
+    startCommand: npm start
     envVars:
       - key: BOT_TOKEN
         value: 8456034289:AAFocvpSevSlavQh_FJnbyJ-WdpVa4Zw9Hw
-      - key: WEB_APP_URL
-        value: https://razetka2010.github.io/gdz-navigator/
       - key: PORT
         value: 3000
     healthCheckPath: /health
-    autoDeploy: true
