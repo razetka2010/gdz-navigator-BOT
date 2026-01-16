@@ -2,6 +2,6 @@ __pycache__/
 *.pyc
 .env
 venv/
+bot.log
 *.log
-secrets/
-config.py
+stormkit.json
