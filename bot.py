@@ -16,168 +16,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# =================== FLASK ДЛЯ STORMKIT ===================
-
-# Создаем Flask приложение для Stormkit
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>🤖 ГДЗ Навигатор Бот</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                text-align: center;
-                padding: 50px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                min-height: 100vh;
-                margin: 0;
-            }
-            .container {
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(10px);
-                padding: 30px;
-                border-radius: 20px;
-                max-width: 600px;
-                margin: 0 auto;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-            }
-            h1 {
-                font-size: 2.5em;
-                margin-bottom: 20px;
-            }
-            .status {
-                font-size: 1.5em;
-                color: #4CAF50;
-                font-weight: bold;
-                margin: 20px 0;
-            }
-            .info {
-                font-size: 1.1em;
-                line-height: 1.6;
-                margin: 20px 0;
-            }
-            .telegram-btn {
-                display: inline-block;
-                background: #0088cc;
-                color: white;
-                padding: 15px 30px;
-                text-decoration: none;
-                border-radius: 10px;
-                font-size: 1.2em;
-                margin-top: 20px;
-                transition: transform 0.3s;
-            }
-            .telegram-btn:hover {
-                transform: translateY(-3px);
-                background: #0077b5;
-            }
-            .footer {
-                margin-top: 30px;
-                font-size: 0.9em;
-                opacity: 0.8;
-            }
-            .bot-status {
-                background: rgba(255, 255, 255, 0.2);
-                padding: 10px;
-                border-radius: 10px;
-                margin: 20px 0;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>📚 ГДЗ Навигатор Бот</h1>
-            <div class="status">✅ БОТ АКТИВЕН И РАБОТАЕТ</div>
-            
-            <div class="bot-status">
-                <p>🤖 Telegram бот работает в фоновом режиме</p>
-                <p>📚 Классы: 7-9</p>
-                <p>⭐ Избранное: активна</p>
-                <p>📱 Mini App: доступен</p>
-            </div>
-            
-            <div class="info">
-                <p>🤖 Telegram-бот для поиска готовых домашних заданий</p>
-                <p>👨‍🎓 Для учеников 7-9 классов</p>
-                <p>📱 Удобный интерфейс с Mini App</p>
-                <p>⭐ Сохранение избранных предметов</p>
-            </div>
-            
-            <a href="https://t.me/gdz_navigator_bot" class="telegram-btn" target="_blank">
-                🔗 Перейти в Telegram-бота
-            </a>
-            
-            <div class="footer">
-                <p>🕐 Сервер активен с: {{ time_str }}</p>
-                <p>🚀 Размещено на Stormkit.io</p>
-                <p>📡 Статус: <span style="color: #4CAF50;">ONLINE</span></p>
-                <p>🔄 Последнее обновление: {{ update_time }}</p>
-            </div>
-        </div>
-        
-        <script>
-            // Авто-обновление времени
-            function updateTime() {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString();
-                const dateStr = now.toLocaleDateString();
-                document.getElementById('current-time').innerText = timeStr;
-                document.getElementById('current-date').innerText = dateStr;
-            }
-            
-            setInterval(updateTime, 1000);
-            updateTime();
-            
-            // Проверка статуса бота
-            async function checkBotStatus() {
-                try {
-                    const response = await fetch('/health');
-                    if (response.ok) {
-                        document.getElementById('bot-status').innerHTML = 
-                            '<span style="color: #4CAF50;">✅ Бот работает</span>';
-                    }
-                } catch (error) {
-                    document.getElementById('bot-status').innerHTML = 
-                        '<span style="color: #ff6b6b;">⚠️ Проверка статуса...</span>';
-                }
-            }
-            
-            // Проверяем статус каждые 30 секунд
-            setInterval(checkBotStatus, 30000);
-            checkBotStatus();
-        </script>
-    </body>
-    </html>
-    """, time_str=time.strftime("%d.%m.%Y"), update_time=time.strftime("%H:%M:%S"))
-
-@app.route('/health')
-def health():
-    """Эндпоинт для проверки здоровья"""
-    return 'OK', 200
-
-@app.route('/status')
-def status():
-    """Статус бота"""
-    return {
-        "status": "online",
-        "service": "gdz-navigator-bot",
-        "timestamp": time.time(),
-        "version": "1.0"
-    }
-
-def run_flask():
-    """Запуск Flask сервера в отдельном потоке"""
-    port = int(os.environ.get('PORT', 8080))
-    logger.info(f"🌐 Flask сервер запускается на порту {port}")
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
 # =================== КОНФИГУРАЦИЯ ===================
 
 # URL вашего Mini App
@@ -882,10 +720,6 @@ def run_bot():
         return
     
     try:
-        # Запускаем Flask в отдельном потоке
-        flask_thread = Thread(target=run_flask, daemon=True)
-        flask_thread.start()
-        logger.info("🌐 Flask сервер запущен в отдельном потоке")
         
         # Создаем приложение
         application = Application.builder().token(TOKEN).build()
@@ -969,3 +803,4 @@ if __name__ == "__main__":
     
     # Запускаем бота
     run_bot()
+
