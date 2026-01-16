@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: gdz-bot-working
+    name: gdz-encyclopedia-bot
     env: node
     region: frankfurt
     plan: free
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node index.js
     envVars:
       - key: BOT_TOKEN
         value: 8456034289:AAFocvpSevSlavQh_FJnbyJ-WdpVa4Zw9Hw
