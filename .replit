@@ -1,5 +1,0 @@
-language = "python3"
-run = "python bot.py"
-
-[packs]
-python3 = "3.10"
