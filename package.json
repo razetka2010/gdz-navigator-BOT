@@ -1,25 +1,13 @@
 {
   "name": "gdz-navigator-bot",
   "version": "1.0.0",
-  "description": "Telegram бот для поиска ГДЗ 7-9 классы",
+  "description": "GDZ Telegram Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   },
-  "keywords": ["telegram", "bot", "gdz", "education"],
-  "author": "GDZ Navigator Team",
-  "license": "MIT",
   "dependencies": {
-    "telegraf": "^4.16.3",
-    "express": "^4.18.2",
-    "axios": "^1.6.2",
-    "dotenv": "^16.3.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "node-telegram-bot-api": "0.64.0",
+    "express": "4.18.2"
   }
 }
