@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: gdz-navigator-bot
+    env: node
+    region: frankfurt  # или другой регион
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEB_APP_URL
+        value: https://razetka2010.github.io/gdz-navigator/
+    healthCheckPath: /health
+    autoDeploy: true
