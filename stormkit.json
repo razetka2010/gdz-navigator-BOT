@@ -9,7 +9,7 @@
   },
   "environment": {
     "BOT_TOKEN": {
-      "description": "Токен Telegram бота от @BotFather",
+      "description": "8456034289:AAFocvpSevSlavQh_FJnbyJ-WdpVa4Zw9Hw",
       "required": true,
       "secret": true
     },
